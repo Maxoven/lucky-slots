@@ -827,7 +827,7 @@
 
         // Increase bet
         function increaseBet() {
-            if (currentBet < balance && currentBet < 100) {
+            if (currentBet < balance) {
                 currentBet += 5;
                 if (currentBet > balance) currentBet = balance;
                 updateDisplay();
