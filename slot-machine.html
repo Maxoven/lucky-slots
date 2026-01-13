@@ -238,9 +238,8 @@
         }
 
         .bet-controls {
-            display: flex;
-            align-items: center;
-            justify-content: center;
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
             gap: 10px;
             background: rgba(15, 52, 96, 0.5);
             padding: 15px;
@@ -251,15 +250,26 @@
         .bet-label {
             color: #fbbf24;
             font-size: 0.6em;
+            grid-column: 1 / -1;
+            text-align: center;
+            margin-bottom: 5px;
+        }
+
+        .bet-amount {
+            color: #10b981;
+            font-size: 1.2em;
+            text-align: center;
+            grid-column: 1 / -1;
+            margin-bottom: 10px;
         }
 
         .bet-button {
             background: linear-gradient(135deg, #475569, #334155);
             border: 2px solid #64748b;
             color: white;
-            padding: 10px 15px;
+            padding: 10px 8px;
             border-radius: 10px;
-            font-size: 0.7em;
+            font-size: 0.5em;
             cursor: pointer;
             font-family: 'Press Start 2P', cursive;
             transition: all 0.2s;
@@ -270,11 +280,13 @@
             transform: scale(1.05);
         }
 
-        .bet-amount {
-            color: #10b981;
-            font-size: 1.2em;
-            min-width: 80px;
-            text-align: center;
+        .bet-button.big {
+            background: linear-gradient(135deg, #7c3aed, #6d28d9);
+            border-color: #8b5cf6;
+        }
+
+        .bet-button.big:hover {
+            background: linear-gradient(135deg, #8b5cf6, #7c3aed);
         }
 
         .spin-button {
@@ -667,12 +679,14 @@
 
             <div class="controls">
                 <div class="bet-controls">
-                    <button class="bet-button" onclick="decreaseBet()">-</button>
-                    <div>
-                        <div class="bet-label">BET</div>
-                        <div class="bet-amount" id="betAmount">10 UE</div>
-                    </div>
-                    <button class="bet-button" onclick="increaseBet()">+</button>
+                    <div class="bet-label">BET AMOUNT</div>
+                    <div class="bet-amount" id="betAmount">10 UE</div>
+                    <button class="bet-button" onclick="decreaseBet(500)">-500</button>
+                    <button class="bet-button" onclick="decreaseBet(100)">-100</button>
+                    <button class="bet-button" onclick="decreaseBet(5)">-5</button>
+                    <button class="bet-button" onclick="increaseBet(5)">+5</button>
+                    <button class="bet-button" onclick="increaseBet(100)">+100</button>
+                    <button class="bet-button big" onclick="increaseBet(500)">+500</button>
                 </div>
 
                 <button class="spin-button" id="spinButton" onclick="spin()">
@@ -681,8 +695,8 @@
             </div>
         </div>
 
-        <button class="refill-button" onclick="refillBalance()">
-            💰 ADD 50 UE
+        <button class="refill-button" id="refillButton" onclick="refillBalance()">
+            💰 ADD 500 UE (Available in: <span id="refillTimer">00:00</span>)
         </button>
 
         <div class="paytable">
@@ -736,6 +750,8 @@
         let isSpinning = false;
         let playerName = '';
         const API_BASE = window.location.origin; // For production deployment
+        let refillAvailableTime = null;
+        let refillTimerInterval = null;
 
         // Symbols and their weights (higher weight = more common)
         const symbols = [
@@ -826,29 +842,108 @@
         }
 
         // Increase bet
-        function increaseBet() {
+        function increaseBet(amount = 5) {
             if (currentBet < balance) {
-                currentBet += 5;
+                currentBet += amount;
                 if (currentBet > balance) currentBet = balance;
                 updateDisplay();
             }
         }
 
         // Decrease bet
-        function decreaseBet() {
-            if (currentBet > 5) {
-                currentBet -= 5;
+        function decreaseBet(amount = 5) {
+            if (currentBet > amount) {
+                currentBet -= amount;
+                updateDisplay();
+            } else {
+                currentBet = 5; // Minimum bet
                 updateDisplay();
             }
         }
 
-        // Refill balance
+        // Refill balance (once per hour)
         function refillBalance() {
-            balance += 50;
+            const now = Date.now();
+            
+            // Check if refill is available
+            if (refillAvailableTime && now < refillAvailableTime) {
+                const timeLeft = Math.ceil((refillAvailableTime - now) / 1000 / 60);
+                alert(`Refill not available yet! Please wait ${timeLeft} more minutes.`);
+                return;
+            }
+            
+            // Add 500 UE
+            balance += 500;
             saveBalance();
             updateDisplay();
-            showMessage('💰 Added 50 UE to your balance!', 'win');
+            showMessage('💰 Added 500 UE to your balance!', 'win');
             playSound('refill');
+            
+            // Set next available time (1 hour from now)
+            refillAvailableTime = now + (60 * 60 * 1000); // 1 hour in milliseconds
+            localStorage.setItem('refillAvailableTime', refillAvailableTime.toString());
+            
+            // Start countdown timer
+            updateRefillTimer();
+        }
+
+        // Update refill timer display
+        function updateRefillTimer() {
+            const button = document.getElementById('refillButton');
+            const timerSpan = document.getElementById('refillTimer');
+            const now = Date.now();
+            
+            // Clear existing interval
+            if (refillTimerInterval) {
+                clearInterval(refillTimerInterval);
+            }
+            
+            // Check if cooldown is active
+            if (!refillAvailableTime || now >= refillAvailableTime) {
+                button.disabled = false;
+                button.innerHTML = '💰 ADD 500 UE (Available Now!)';
+                return;
+            }
+            
+            // Disable button during cooldown
+            button.disabled = true;
+            
+            // Update timer every second
+            refillTimerInterval = setInterval(() => {
+                const now = Date.now();
+                const timeLeft = refillAvailableTime - now;
+                
+                if (timeLeft <= 0) {
+                    // Cooldown finished
+                    clearInterval(refillTimerInterval);
+                    button.disabled = false;
+                    button.innerHTML = '💰 ADD 500 UE (Available Now!)';
+                    refillAvailableTime = null;
+                    localStorage.removeItem('refillAvailableTime');
+                } else {
+                    // Show remaining time
+                    const minutes = Math.floor(timeLeft / 1000 / 60);
+                    const seconds = Math.floor((timeLeft / 1000) % 60);
+                    const timeString = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+                    button.innerHTML = `💰 ADD 500 UE (Available in: ${timeString})`;
+                }
+            }, 1000);
+        }
+
+        // Load refill timer on page load
+        function loadRefillTimer() {
+            const saved = localStorage.getItem('refillAvailableTime');
+            if (saved) {
+                refillAvailableTime = parseInt(saved);
+                const now = Date.now();
+                
+                // If time has passed, clear it
+                if (now >= refillAvailableTime) {
+                    refillAvailableTime = null;
+                    localStorage.removeItem('refillAvailableTime');
+                }
+            }
+            updateRefillTimer();
         }
 
         // Get random symbol
@@ -944,8 +1039,8 @@
                 });
             }, intervalTime);
 
-            // Determine if player wins (70% chance)
-            const willWin = Math.random() < 0.70;
+            // Determine if player wins (50% chance)
+            const willWin = Math.random() < 0.50;
             let results;
 
             if (willWin) {
@@ -1057,30 +1152,49 @@
 
         // Submit win to leaderboard
         async function submitToLeaderboard(winAmount, betAmount, multiplier, symbol) {
+            console.log('=== SUBMITTING TO LEADERBOARD ===');
+            console.log('Player Name:', playerName);
+            console.log('Win Amount:', winAmount);
+            console.log('API URL:', `${API_BASE}/api/leaderboard`);
+            
+            if (!playerName) {
+                console.error('No player name set!');
+                return;
+            }
+            
             try {
+                const payload = {
+                    player_name: playerName,
+                    win_amount: winAmount,
+                    bet_amount: betAmount,
+                    multiplier: multiplier,
+                    winning_symbols: symbol + symbol + symbol
+                };
+                
+                console.log('Payload:', payload);
+                
                 const response = await fetch(`${API_BASE}/api/leaderboard`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                     },
-                    body: JSON.stringify({
-                        player_name: playerName,
-                        win_amount: winAmount,
-                        bet_amount: betAmount,
-                        multiplier: multiplier,
-                        winning_symbols: symbol + symbol + symbol
-                    })
+                    body: JSON.stringify(payload)
                 });
                 
+                console.log('Response status:', response.status);
                 const result = await response.json();
+                console.log('Response data:', result);
                 
                 if (result.success) {
-                    console.log('Added to leaderboard!');
+                    console.log('✅ Added to leaderboard!');
                     // Reload leaderboard after a short delay
                     setTimeout(() => loadLeaderboard(), 1000);
+                } else {
+                    console.error('❌ Failed to add to leaderboard:', result.message);
                 }
             } catch (error) {
-                console.error('Error submitting to leaderboard:', error);
+                console.error('❌ Error submitting to leaderboard:', error);
+                console.error('This usually means the backend API is not running or not accessible');
             }
         }
 
@@ -1089,12 +1203,18 @@
             const loadingEl = document.getElementById('leaderboardLoading');
             const listEl = document.getElementById('leaderboardList');
             
+            console.log('=== LOADING LEADERBOARD ===');
+            console.log('API URL:', `${API_BASE}/api/leaderboard`);
+            
             try {
                 loadingEl.style.display = 'block';
                 listEl.innerHTML = '';
                 
                 const response = await fetch(`${API_BASE}/api/leaderboard`);
+                console.log('Leaderboard response status:', response.status);
+                
                 const result = await response.json();
+                console.log('Leaderboard data:', result);
                 
                 if (result.success && result.data.length > 0) {
                     loadingEl.style.display = 'none';
@@ -1118,12 +1238,21 @@
                             </div>
                         `;
                     }).join('');
+                    console.log('✅ Leaderboard loaded successfully');
                 } else {
                     loadingEl.textContent = 'No entries yet. Be the first!';
+                    console.log('No leaderboard entries found');
                 }
             } catch (error) {
-                console.error('Error loading leaderboard:', error);
-                loadingEl.textContent = 'Failed to load leaderboard';
+                console.error('❌ Error loading leaderboard:', error);
+                loadingEl.textContent = 'Connection Error - Check if backend is running';
+                
+                // Show helpful error message
+                console.error('=== TROUBLESHOOTING ===');
+                console.error('1. Make sure you deployed to Render as a WEB SERVICE (not static site)');
+                console.error('2. Check Render logs for errors');
+                console.error('3. Make sure setup_leaderboard.py was run');
+                console.error('4. Verify database credentials in app.py are correct');
             }
         }
 
@@ -1183,6 +1312,7 @@
         loadBalance();
         createStars();
         loadLeaderboard();
+        loadRefillTimer();
     </script>
 </body>
 </html>
